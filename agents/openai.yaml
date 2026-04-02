@@ -1,0 +1,4 @@
+interface:
+  display_name: "AutoCatalyst"
+  short_description: "Subagent-native incumbent–challenger workflow with repo artifacts, Mermaid flowcharts, and a browser report."
+  default_prompt: "Run a full AutoCatalyst round with real subagents, durable repo artifacts, Mermaid flowcharts, and a browser-viewable report."

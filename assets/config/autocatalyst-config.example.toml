@@ -1,0 +1,7 @@
+# Optional explicit config for AutoCatalyst-heavy repositories.
+# Codex defaults already allow subagents, so this file is informational unless
+# you choose to merge it into .codex/config.toml yourself.
+
+[agents]
+max_threads = 6
+max_depth = 1
