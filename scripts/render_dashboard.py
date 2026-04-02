@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from convergence import convergence_status, load_session
+
 
 MERMAID_CDN = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
 
@@ -175,15 +177,18 @@ def collect_summary(config: dict[str, Any], rounds: list[dict[str, Any]]) -> dic
 
 
 def render_dashboard(root: Path) -> str:
-    rows = load_jsonl(root / "autocatalyst.jsonl")
-    if not rows:
+    try:
+        config, rounds = load_session(root)
+    except ValueError:
+        rows = load_jsonl(root / "autocatalyst.jsonl")
+        if not rows:
+            return "# AutoCatalyst Dashboard\n\nNo session found.\n"
+        raise
+    if not rounds and not config:
         return "# AutoCatalyst Dashboard\n\nNo session found.\n"
 
-    config, rounds = split_rows(rows)
-    if config is None:
-        raise ValueError("autocatalyst.jsonl must start with a config row")
-
     summary = collect_summary(config, rounds)
+    convergence = convergence_status(config, rounds)
     counts = summary["counts"]
     winner_counts = summary["winner_counts"]
     latest = summary["latest"]
@@ -194,6 +199,8 @@ def render_dashboard(root: Path) -> str:
     lines.append(f"**Task class:** {summary['task_class']}  ")
     lines.append(f"**Evidence mode:** {summary['evidence_mode']}  ")
     lines.append(f"**Survival target:** {summary['survival_target']}  ")
+    lines.append(f"**Current survival streak:** {convergence['currentSurvivalStreak']}  ")
+    lines.append(f"**Convergence decision:** {convergence['decision']}  ")
     lines.append(f"**Rounds logged:** {summary['round_count']}  ")
     lines.append(f"**Degraded rounds:** {summary['degraded_count']}  ")
     lines.append("**Browser report:** `autocatalyst-report.html`")
@@ -211,6 +218,7 @@ def render_dashboard(root: Path) -> str:
             lines.append(
                 f"- Latest round: #{latest.get('round')} winner={latest.get('winner')} status={latest.get('status')} — {sanitize(latest.get('winnerReason', ''))}"
             )
+        lines.append(f"- Convergence: {convergence['reason']}")
     else:
         lines.append("- No rounds logged yet.")
     lines.append("")
@@ -363,10 +371,9 @@ def render_html_report(root: Path) -> str:
 <body><h1>AutoCatalyst Report</h1><p>No session found.</p></body></html>
 """
 
-    config, rounds = split_rows(rows)
-    if config is None:
-        raise ValueError("autocatalyst.jsonl must start with a config row")
+    config, rounds = load_session(root)
     summary = collect_summary(config, rounds)
+    convergence = convergence_status(config, rounds)
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
 
     round_rows: list[str] = []
@@ -521,13 +528,16 @@ def render_html_report(root: Path) -> str:
         {html_badge(f"evidence mode: {summary['evidence_mode']}", 'neutral')}
         {html_badge(f"rounds: {summary['round_count']}", 'neutral')}
         {html_badge(f"survival target: {summary['survival_target']}", 'neutral')}
+        {html_badge(f"streak: {convergence['currentSurvivalStreak']}", 'neutral')}
+        {html_badge(f"decision: {convergence['decision']}", 'warn' if convergence['shouldStop'] else 'good')}
         {html_badge(f"degraded rounds: {summary['degraded_count']}", 'warn' if summary['degraded_count'] else 'good')}
       </div>
-      <p class="muted">Generated {escape(generated_at)} from <code>autocatalyst.jsonl</code>. This report stays readable even if Mermaid does not load; diagrams will then appear as raw source blocks.</p>
+      <p class="muted">Generated {escape(generated_at)} from <code>autocatalyst.jsonl</code>. {escape(convergence['reason'])} This report stays readable even if Mermaid does not load; diagrams will then appear as raw source blocks.</p>
     </section>
 
     <section class="grid summary-grid">
       <div class="card"><h3>Rounds logged</h3><div class="metric">{summary['round_count']}</div><p class="muted">Total tribunal decisions captured so far.</p></div>
+      <div class="card"><h3>Survival streak</h3><div class="metric">{convergence['currentSurvivalStreak']} / {summary['survival_target']}</div><p class="muted">{escape(convergence['reason'])}</p></div>
       <div class="card"><h3>Latest winner</h3><div class="metric">{escape(str(summary['latest'].get('winner', '—')) if summary['latest'] else '—')}</div><p class="muted">{escape(sanitize(summary['latest'].get('winnerReason', 'No rounds logged yet.')) if summary['latest'] else 'No rounds logged yet.')}</p></div>
       <div class="card"><h3>Status counts</h3><div class="metric">P {summary['counts'].get('promote', 0)} · K {summary['counts'].get('keep', 0)}</div><p class="muted">Mixed {summary['counts'].get('mixed', 0)} · Blocked {summary['counts'].get('blocked', 0)} · Rejected {summary['counts'].get('rejected', 0)}</p></div>
       <div class="card"><h3>Winner counts</h3><div class="metric">A {summary['winner_counts'].get('A', 0)} / B {summary['winner_counts'].get('B', 0)} / AB {summary['winner_counts'].get('AB', 0)}</div><p class="muted">How often the incumbent, rewrite, or synthesis won.</p></div>
@@ -611,9 +621,7 @@ def write_artifacts(root: Path) -> None:
     rows = load_jsonl(root / "autocatalyst.jsonl")
     if not rows:
         return
-    config, rounds = split_rows(rows)
-    if config is None:
-        raise ValueError("autocatalyst.jsonl must start with a config row")
+    config, rounds = load_session(root)
 
     artifacts_dir = root / "autocatalyst-artifacts"
     rounds_dir = artifacts_dir / "rounds"

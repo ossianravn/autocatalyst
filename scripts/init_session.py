@@ -15,14 +15,15 @@ AGENTS_BLOCK = dedent(
     """
     <!-- autocatalyst:start -->
     ## AutoCatalyst session rules
-    When `autocatalyst.md` exists at the repository root:
-    - Read `autocatalyst.md`, `autocatalyst.jsonl`, `autocatalyst-rubric.md`, `autocatalyst-dashboard.md`, and `autocatalyst-artifacts/` before proposing the next round.
-    - Bootstrap missing session files or missing `.codex/agents/` files before the first round.
-    - Run full AutoCatalyst mode with real subagents from `.codex/agents/`; do not simulate critic or judges in the main thread.
-    - If subagents do not actually spawn, say `degraded single-agent mode` and stop unless the user explicitly accepts fallback.
-    - Preserve the incumbent as a control arm.
-    - Promote recurring critiques into rubric items, tests, or checks whenever possible.
-    - Refresh the dashboard, Mermaid artifacts, and browser report after each logged round.
+When `autocatalyst.md` exists at the repository root:
+- Read `autocatalyst.md`, `autocatalyst.jsonl`, `autocatalyst-rubric.md`, `autocatalyst-dashboard.md`, and `autocatalyst-artifacts/` before proposing the next round.
+- Bootstrap missing session files or missing `.codex/agents/` files before the first round.
+- Before starting another round, compute convergence from `autocatalyst.jsonl` and stop when the incumbent survival streak reaches `survivalTarget`.
+- Run full AutoCatalyst mode with real subagents from `.codex/agents/`; do not simulate critic or judges in the main thread.
+- If subagents do not actually spawn, say `degraded single-agent mode` and stop unless the user explicitly accepts fallback.
+- Preserve the incumbent as a control arm.
+- Promote recurring critiques into rubric items, tests, or checks whenever possible.
+- Refresh the dashboard, Mermaid artifacts, and browser report after each logged round.
     <!-- autocatalyst:end -->
     """
 ).lstrip()

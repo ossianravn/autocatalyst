@@ -144,6 +144,32 @@ In practice, the flow is:
 
 This automatic path is part of the skill instructions and matches the idempotent behavior of the bootstrap scripts.
 
+## How Many Rounds Does It Run?
+
+AutoCatalyst does not run for a fixed hard-coded number of rounds like "always do 3."
+
+Instead, it uses a convergence rule. The main automatic control is the **survival target**:
+
+- when the incumbent wins a round as `A` with `status=keep`, the survival streak increases
+- when a challenger wins as `B` or `AB` with `status=promote`, the survival streak resets
+- when the survival streak reaches `survivalTarget`, AutoCatalyst should stop
+
+The default `survivalTarget` is `2`, which means the incumbent must survive two fresh challenge rounds before the loop stops on that rule.
+
+You can set it during setup:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/bootstrap.py --root . --goal "Design a markdown conversion tool for the web app" --survival-target 3 --install-agents-md
+```
+
+After each round, AutoCatalyst can compute the current stop/continue decision with:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
+```
+
+Other stop conditions still matter too, such as flattening benchmark gains, repeated minor feedback, user interruption, or reaching a good enough handoff state.
+
 ## What A Round Looks Like
 
 Think of one round like this:
@@ -265,6 +291,12 @@ python3 .agents/skills/autocatalyst/scripts/install_subagents.py --root .
 
 ```bash
 python3 .agents/skills/autocatalyst/scripts/render_dashboard.py --root .
+```
+
+### Check whether another round should run
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
 ```
 
 ### Run a repo-local checks hook

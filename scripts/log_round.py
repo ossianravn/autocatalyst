@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from convergence import convergence_status, split_rows
 from render_dashboard import render_dashboard, write_artifacts
 
 VALID_STATUS = {"promote", "keep", "mixed", "blocked", "rejected"}
@@ -87,7 +88,12 @@ def main() -> None:
     dashboard = render_dashboard(root)
     (root / "autocatalyst-dashboard.md").write_text(dashboard, encoding="utf-8")
     write_artifacts(root)
-    print(f"logged round {args.round} in {jsonl_path}")
+    _, updated_rounds = split_rows(load_rows(jsonl_path))
+    convergence = convergence_status(rows[0], updated_rounds)
+    print(
+        f"logged round {args.round} in {jsonl_path} — "
+        f"{convergence['decision']}: {convergence['reason']}"
+    )
 
 
 if __name__ == "__main__":

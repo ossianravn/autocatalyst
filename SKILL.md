@@ -41,6 +41,11 @@ Keep durable state in these files:
 - optional `autocatalyst.checks.py` or another supported checks hook such as `.ps1`, `.cmd`, or `.sh`
 
 Prefer helper scripts for initialization, subagent installation, logging, and Mermaid/dashboard rendering.
+Prefer the convergence helper to decide whether another round should run:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
+```
 
 ## First-run setup
 
@@ -110,6 +115,7 @@ Use these when the wrapper scripts are not convenient:
 python3 .agents/skills/autocatalyst/scripts/init_session.py --root . --goal "Improve the current repository deliverable" --task-class hybrid --evidence-mode hybrid --install-subagents --install-agents-md
 python3 .agents/skills/autocatalyst/scripts/install_subagents.py --root .
 python3 .agents/skills/autocatalyst/scripts/render_dashboard.py --root .
+python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
 ```
 
 On Windows, prefer `py -3` over `python3` when `python3` is not available.
@@ -291,6 +297,26 @@ Use ranked choice or Borda-style aggregation when useful.
 - if `B` or `AB` wins, reset the survival streak and make the winner the new incumbent
 - update the canonical repo artifact only after the tribunal
 - record what won and why
+
+### 9.5. Check convergence before starting another round
+
+Compute convergence from the logged session state:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
+```
+
+Treat the helper output as authoritative for the incumbent survival rule:
+
+- if it says `decision = "stop"`, stop the AutoCatalyst loop
+- if it says `decision = "continue"`, another round is still allowed
+
+Other convergence rules still apply even when the helper says `continue`:
+
+- benchmark gains flatten
+- judges keep repeating minor feedback
+- the user redirects the task
+- the artifact is already good enough for handoff
 
 ### 10. Promote recurring critiques into durable guards
 

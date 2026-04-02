@@ -92,11 +92,18 @@ Run all relevant hard gates before judging:
 - regenerate `autocatalyst-dashboard.md`
 - regenerate Mermaid flow artifacts
 - regenerate `autocatalyst-report.html`
+- compute convergence before starting the next round
 
 Prefer the helper with real values. Logging also refreshes the browser report:
 
 ```bash
 python3 .agents/skills/autocatalyst/scripts/log_round.py --root . --round 1 --winner AB --status promote --winner-reason "AB merged the strongest ideas and clarified the next steps" --hard-checks pass
+```
+
+Then check whether another round should run:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
 ```
 
 ## Tribunal order
@@ -149,11 +156,17 @@ The helper script handles the JSON structure for you.
 
 Stop when one of these becomes true:
 
-- the incumbent survives at least two fresh challenge rounds
+- the convergence helper reports `decision = "stop"` because the incumbent survival streak reached `survivalTarget`
 - benchmark gains flatten and the added complexity is no longer justified
 - judges keep repeating the same minor feedback without changing the winner
 - the user interrupts or redirects the task
 - the artifact is good enough for handoff
+
+The incumbent survival streak is computed automatically from logged rounds:
+
+- `winner=A` with `status=keep` increments the streak
+- `winner=B` or `winner=AB` with `status=promote` resets the streak
+- other round outcomes do not advance the streak
 
 ## Research-heavy tasks
 
