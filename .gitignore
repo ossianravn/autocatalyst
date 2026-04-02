@@ -4,3 +4,12 @@ __pycache__/
 *.pyd
 .DS_Store
 Thumbs.db
+.agents/*
+.codex/*
+AGENTS.md
+autocatalyst-artifacts/
+autocatalyst-dashboard.md
+autocatalyst-report.html
+autocatalyst-rubric.md
+autocatalyst.jsonl
+autocatalyst.md
