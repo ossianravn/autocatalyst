@@ -337,4 +337,4 @@ The README uses Mermaid diagrams so the workflow can be understood visually, and
 
 ## License
 
-Add the license of your choice before publishing.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
