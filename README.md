@@ -238,7 +238,7 @@ AutoCatalyst can use different models for different subagents, but the control p
 
 - `.codex/agents/*.toml` defines what each role does
 - the parent agent chooses the actual `model` and `reasoning_effort` when it spawns each subagent
-- if you do nothing, subagents inherit the parent/default model
+- if you do nothing else, AutoCatalyst can fall back to repo-wide Codex defaults from `.codex/config.toml`
 
 If you want repo-local control, copy the generated example file:
 
@@ -274,6 +274,15 @@ Before spawning subagents, resolve the effective profiles with:
 python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
 ```
 
+Resolution order is:
+
+1. role override in `.codex/autocatalyst-models.toml`
+2. `[defaults]` in `.codex/autocatalyst-models.toml`
+3. repo-wide fallback from `.codex/config.toml`
+4. inherit the parent/default model if nothing else is set
+
+That means a user can put broad defaults in `.codex/config.toml`, then override only the roles that need something different in `.codex/autocatalyst-models.toml`.
+
 The parent agent should then pass the returned `model` and `reasoning_effort` values into each spawn call. This is how you make planners, critics, and judges cheaper while keeping rewrites or synthesis on a stronger model when needed.
 
 ## Runtime Limits In This Repository
@@ -288,11 +297,14 @@ That file is **active policy in this repository**, not just an example.
 
 The current values are:
 
+- `model = "gpt-5.4"`
+- `model_reasoning_effort = "high"`
 - `max_threads = 6`
 - `max_depth = 1`
 
 In plain language:
 
+- Codex in this repo defaults to `gpt-5.4` at `high` reasoning unless a more specific override is chosen
 - up to 6 agent threads can be active at once
 - child agents should not create deeper nested agent trees
 

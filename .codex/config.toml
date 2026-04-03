@@ -4,6 +4,9 @@
 # It intentionally keeps subagent fan-out bounded and prevents child agents
 # from spawning further nested agent trees.
 
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+
 [agents]
 max_threads = 6
 max_depth = 1

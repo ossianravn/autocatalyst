@@ -67,14 +67,18 @@ Use the generated `.codex/agents/*.toml` files for role behavior only.
 
 - Do not assume those files pin the model.
 - Choose `model` and `reasoning_effort` when the parent spawns each agent.
-- If `.codex/autocatalyst-models.toml` exists, resolve it first:
+- Resolve settings first:
 
 ```bash
 python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
 ```
 
+- Precedence is:
+  1. role override from `.codex/autocatalyst-models.toml`
+  2. `[defaults]` from `.codex/autocatalyst-models.toml`
+  3. fallback from `.codex/config.toml`
+  4. otherwise inherit the parent/default model
 - Pass the resolved values into `spawn_agent(...)` for each role.
-- If the file is absent, child agents inherit the parent/default model.
 
 Typical profile split:
 

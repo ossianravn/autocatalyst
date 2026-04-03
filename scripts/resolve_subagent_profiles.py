@@ -61,21 +61,64 @@ def default_config_path(repo_root: Path) -> Path:
     return repo_root / ".codex" / "autocatalyst-models.toml"
 
 
+def codex_config_path(repo_root: Path) -> Path:
+    return repo_root / ".codex" / "config.toml"
+
+
+def load_toml(path: Path) -> dict[str, object]:
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def codex_fallback_profile(repo_root: Path) -> tuple[dict[str, str], str | None]:
+    path = codex_config_path(repo_root).resolve()
+    if not path.exists():
+        return {}, None
+
+    data = load_toml(path)
+    profile = {}
+
+    model = data.get("model")
+    if isinstance(model, str) and model.strip():
+        profile["model"] = model.strip()
+
+    effort = data.get("model_reasoning_effort")
+    if isinstance(effort, str) and effort.strip():
+        profile["reasoning_effort"] = effort.strip()
+
+    return profile, str(path)
+
+
 def resolve_profiles(repo_root: Path, config_path: Path | None = None) -> dict[str, object]:
     path = (config_path or default_config_path(repo_root)).resolve()
     exists = path.exists()
+    codex_defaults, codex_path = codex_fallback_profile(repo_root)
+    warnings: list[str] = []
+
+    codex_effort = codex_defaults.get("reasoning_effort")
+    if codex_effort and codex_effort not in VALID_REASONING_EFFORTS:
+        warnings.append(
+            f"Invalid model_reasoning_effort '{codex_effort}' in {Path(codex_path).name if codex_path else 'config.toml'}. Expected one of: "
+            + ", ".join(sorted(VALID_REASONING_EFFORTS))
+        )
+
     if not exists:
         return {
             "configPath": None,
-            "profiles": {role: {} for role in ROLE_ORDER},
-            "warnings": [],
+            "codexConfigPath": codex_path,
+            "precedence": [
+                "role override from .codex/autocatalyst-models.toml",
+                "defaults from .codex/autocatalyst-models.toml",
+                "fallback from .codex/config.toml",
+                "inherit parent/default model when no settings are resolved",
+            ],
+            "profiles": {role: dict(codex_defaults) for role in ROLE_ORDER},
+            "warnings": warnings,
         }
 
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    data = load_toml(path)
     defaults = normalize_profile(data.get("defaults"))
     roles = data.get("roles") if isinstance(data.get("roles"), dict) else {}
     profiles: dict[str, dict[str, str]] = {}
-    warnings: list[str] = []
     normalized_roles: dict[str, object] = {}
 
     default_effort = defaults.get("reasoning_effort")
@@ -92,7 +135,8 @@ def resolve_profiles(repo_root: Path, config_path: Path | None = None) -> dict[s
             warnings.append(f"Ignoring unknown role key '{key}' in {path.name}.")
 
     for role in ROLE_ORDER:
-        merged = dict(defaults)
+        merged = dict(codex_defaults)
+        merged.update(defaults)
         raw_role_profile = normalized_roles.get(role, {})
         role_profile = normalize_profile(raw_role_profile)
         effort = role_profile.get("reasoning_effort")
@@ -106,6 +150,13 @@ def resolve_profiles(repo_root: Path, config_path: Path | None = None) -> dict[s
 
     return {
         "configPath": str(path),
+        "codexConfigPath": codex_path,
+        "precedence": [
+            "role override from .codex/autocatalyst-models.toml",
+            "defaults from .codex/autocatalyst-models.toml",
+            "fallback from .codex/config.toml",
+            "inherit parent/default model when no settings are resolved",
+        ],
         "profiles": profiles,
         "warnings": warnings,
     }

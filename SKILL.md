@@ -192,14 +192,18 @@ Important:
 
 - The generated `.codex/agents/*.toml` files define the role and sandbox posture. They do **not** pin the model.
 - Model choice happens when the parent agent spawns each subagent.
-- If `.codex/autocatalyst-models.toml` exists, resolve it before spawning:
+- Resolve model settings before spawning:
 
 ```bash
 python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
 ```
 
+- Precedence is:
+  1. role override from `.codex/autocatalyst-models.toml`
+  2. `[defaults]` from `.codex/autocatalyst-models.toml`
+  3. fallback from `.codex/config.toml`
+  4. otherwise inherit the parent/default model
 - Pass the resolved `model` and `reasoning_effort` values into each `spawn_agent(...)` call.
-- If no model profile file exists, let the child agents inherit the parent/default model.
 
 Use [references/subagents.md](references/subagents.md) for the exact role packets and example delegation language.
 
