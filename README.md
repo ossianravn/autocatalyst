@@ -232,6 +232,50 @@ AutoCatalyst supports three evaluation styles:
 - `benchmark-first` for work where tests, performance, regressions, or metrics dominate
 - `hybrid` when both machine checks and human judgment matter
 
+## Choosing Models For Different Roles
+
+AutoCatalyst can use different models for different subagents, but the control point is important:
+
+- `.codex/agents/*.toml` defines what each role does
+- the parent agent chooses the actual `model` and `reasoning_effort` when it spawns each subagent
+- if you do nothing, subagents inherit the parent/default model
+
+If you want repo-local control, copy the generated example file:
+
+```text
+.codex/autocatalyst-models.example.toml
+```
+
+to:
+
+```text
+.codex/autocatalyst-models.toml
+```
+
+Then adjust it. A typical split is:
+
+```toml
+[defaults]
+model = "gpt-5.4-mini"
+reasoning_effort = "medium"
+
+[roles.rewriter]
+model = "gpt-5.4"
+reasoning_effort = "high"
+
+[roles.synthesizer]
+model = "gpt-5.4"
+reasoning_effort = "high"
+```
+
+Before spawning subagents, resolve the effective profiles with:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
+```
+
+The parent agent should then pass the returned `model` and `reasoning_effort` values into each spawn call. This is how you make planners, critics, and judges cheaper while keeping rewrites or synthesis on a stronger model when needed.
+
 ## What Gets Written To The Repo
 
 AutoCatalyst keeps its session state in the target repository, not in the skill bundle.
@@ -297,6 +341,12 @@ python3 .agents/skills/autocatalyst/scripts/render_dashboard.py --root .
 
 ```bash
 python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
+```
+
+### Resolve per-role model profiles
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
 ```
 
 ### Run a repo-local checks hook

@@ -19,6 +19,7 @@ When `autocatalyst.md` exists at the repository root:
 - Read `autocatalyst.md`, `autocatalyst.jsonl`, `autocatalyst-rubric.md`, `autocatalyst-dashboard.md`, and `autocatalyst-artifacts/` before proposing the next round.
 - Bootstrap missing session files or missing `.codex/agents/` files before the first round.
 - Before starting another round, compute convergence from `autocatalyst.jsonl` and stop when the incumbent survival streak reaches `survivalTarget`.
+- If `.codex/autocatalyst-models.toml` exists, resolve it and pass explicit `model` and `reasoning_effort` values when spawning each AutoCatalyst subagent.
 - Run full AutoCatalyst mode with real subagents from `.codex/agents/`; do not simulate critic or judges in the main thread.
 - If subagents do not actually spawn, say `degraded single-agent mode` and stop unless the user explicitly accepts fallback.
 - Preserve the incumbent as a control arm.

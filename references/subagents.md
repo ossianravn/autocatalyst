@@ -61,6 +61,26 @@ Use exactly these responsibilities:
 
 Do not merge roles in one child agent.
 
+## Runtime model selection
+
+Use the generated `.codex/agents/*.toml` files for role behavior only.
+
+- Do not assume those files pin the model.
+- Choose `model` and `reasoning_effort` when the parent spawns each agent.
+- If `.codex/autocatalyst-models.toml` exists, resolve it first:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
+```
+
+- Pass the resolved values into `spawn_agent(...)` for each role.
+- If the file is absent, child agents inherit the parent/default model.
+
+Typical profile split:
+
+- planner, researcher, critic, judge: `gpt-5.4-mini`
+- rewriter, synthesizer: `gpt-5.4`
+
 ## Role packets
 
 Keep every packet narrow.
@@ -187,6 +207,7 @@ Return each vote and the majority result.
 ```text
 Spawn autocatalyst_critic and wait for the result.
 Give it the anchor and incumbent A only.
+If a resolved profile exists for the critic, pass its model and reasoning settings explicitly.
 Require a problems-only critique: severe issues first, no fixes, no rewrite.
 ```
 
@@ -195,6 +216,7 @@ Require a problems-only critique: severe issues first, no fixes, no rewrite.
 ```text
 Spawn autocatalyst_rewriter and wait for the result.
 Give it the anchor, incumbent A, the critique, any evidence packet, and the exact output path for candidate B.
+If a resolved profile exists for the rewriter, pass its model and reasoning settings explicitly.
 ```
 
 ### Synthesis example
@@ -202,6 +224,7 @@ Give it the anchor, incumbent A, the critique, any evidence packet, and the exac
 ```text
 Spawn autocatalyst_synthesizer and wait for the result.
 Give it the anchor, candidate A, candidate B, and the output path for candidate AB.
+If a resolved profile exists for the synthesizer, pass its model and reasoning settings explicitly.
 ```
 
 ### Blind panel example
@@ -209,6 +232,7 @@ Give it the anchor, candidate A, candidate B, and the output path for candidate 
 ```text
 Spawn three autocatalyst_judge agents and wait for all of them.
 Give each judge the anchor, rubric, and anonymized A/B/AB only.
+If a resolved judge profile exists, pass its model and reasoning settings to each judge spawn.
 Return each ranking and a consolidated winner.
 ```
 

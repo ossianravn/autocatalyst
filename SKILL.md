@@ -116,6 +116,7 @@ python3 .agents/skills/autocatalyst/scripts/init_session.py --root . --goal "Imp
 python3 .agents/skills/autocatalyst/scripts/install_subagents.py --root .
 python3 .agents/skills/autocatalyst/scripts/render_dashboard.py --root .
 python3 .agents/skills/autocatalyst/scripts/check_convergence.py --root .
+python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
 ```
 
 On Windows, prefer `py -3` over `python3` when `python3` is not available.
@@ -186,6 +187,19 @@ Use the custom agents installed at `.codex/agents/`:
 - `autocatalyst_rewriter`
 - `autocatalyst_synthesizer`
 - `autocatalyst_judge`
+
+Important:
+
+- The generated `.codex/agents/*.toml` files define the role and sandbox posture. They do **not** pin the model.
+- Model choice happens when the parent agent spawns each subagent.
+- If `.codex/autocatalyst-models.toml` exists, resolve it before spawning:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root .
+```
+
+- Pass the resolved `model` and `reasoning_effort` values into each `spawn_agent(...)` call.
+- If no model profile file exists, let the child agents inherit the parent/default model.
 
 Use [references/subagents.md](references/subagents.md) for the exact role packets and example delegation language.
 

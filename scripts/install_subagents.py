@@ -23,7 +23,7 @@ def install_subagents(repo_root: Path, overwrite: bool = False, write_config_exa
     skill_root = script_dir.parent
     skill_md = (skill_root / "SKILL.md").resolve()
     assets_dir = skill_root / "assets" / "subagents"
-    config_asset = skill_root / "assets" / "config" / "autocatalyst-config.example.toml"
+    config_assets_dir = skill_root / "assets" / "config"
 
     if not skill_md.exists():
         raise FileNotFoundError(f"Missing SKILL.md at {skill_md}")
@@ -45,18 +45,24 @@ def install_subagents(repo_root: Path, overwrite: bool = False, write_config_exa
         else:
             skipped.append(str(target.relative_to(repo_root)))
 
-    if write_config_example and config_asset.exists():
-        config_target = repo_root / ".codex" / "autocatalyst-config.example.toml"
-        if write_text(config_target, config_asset.read_text(encoding="utf-8"), overwrite=overwrite):
-            written.append(str(config_target.relative_to(repo_root)))
-        else:
-            skipped.append(str(config_target.relative_to(repo_root)))
+    if write_config_example and config_assets_dir.exists():
+        for config_asset in sorted(config_assets_dir.glob("*.toml")):
+            config_target = repo_root / ".codex" / config_asset.name
+            if write_text(config_target, config_asset.read_text(encoding="utf-8"), overwrite=overwrite):
+                written.append(str(config_target.relative_to(repo_root)))
+            else:
+                skipped.append(str(config_target.relative_to(repo_root)))
 
     readme = repo_root / ".codex" / "README.autocatalyst.md"
     readme_text = (
         "# AutoCatalyst subagents\n\n"
         "These project-scoped custom agents were installed by the AutoCatalyst skill.\n\n"
         "The generated agent files live in `.codex/agents/`.\n\n"
+        "Optional repo-local examples also live in `.codex/`, including:\n\n"
+        "- `autocatalyst-config.example.toml`\n"
+        "- `autocatalyst-models.example.toml`\n\n"
+        "To control subagent models per role, copy `autocatalyst-models.example.toml` to "
+        "`autocatalyst-models.toml` and let the parent agent resolve that file before spawning.\n\n"
         "## Refreshing the install\n\n"
         "Re-run the AutoCatalyst bootstrap from the repository root after the repo moves or after you update the skill.\n\n"
         "### Repo-local skill install\n\n"
@@ -80,7 +86,7 @@ def main() -> None:
     parser.add_argument(
         "--skip-config-example",
         action="store_true",
-        help="do not write .codex/autocatalyst-config.example.toml",
+        help="do not write .codex/*.example.toml helper files",
     )
     args = parser.parse_args()
 
