@@ -276,6 +276,50 @@ python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root 
 
 The parent agent should then pass the returned `model` and `reasoning_effort` values into each spawn call. This is how you make planners, critics, and judges cheaper while keeping rewrites or synthesis on a stronger model when needed.
 
+## Runtime Limits In This Repository
+
+This repository now includes a real repo policy file at:
+
+```text
+.codex/config.toml
+```
+
+That file is **active policy in this repository**, not just an example.
+
+The current values are:
+
+- `max_threads = 6`
+- `max_depth = 1`
+
+In plain language:
+
+- up to 6 agent threads can be active at once
+- child agents should not create deeper nested agent trees
+
+Why these values were chosen:
+
+- AutoCatalyst often needs a small panel instead of one helper, for example 3 judges in a blind tribunal or 3 agents in an evidence-mode vote.
+- `max_threads = 6` leaves room for that normal fan-out plus a little headroom without encouraging uncontrolled parallelism.
+- `max_depth = 1` keeps the workflow understandable: the main agent may spawn the AutoCatalyst role agents, but those child agents should not keep spawning their own child trees.
+
+This matters because AutoCatalyst is designed to get fresh, bounded perspectives from a few narrowly scoped agents, not to create a large recursive swarm. The limit keeps cost, latency, and coordination overhead under control.
+
+What this means in practice:
+
+- a normal judging step with 3 judges fits comfortably inside the limit
+- an evidence-mode vote with planner + critic + 1 judge also fits comfortably
+- the skill can still do some bounded parallel read-heavy work
+- but it should avoid runaway fan-out and nested delegation chains
+
+If you want different behavior in another repository, set that repository's own `.codex/config.toml`. The values in this repo do not automatically control every target repo that installs the skill.
+
+By contrast, these files are still **illustrative examples** for target repos:
+
+- `.codex/autocatalyst-config.example.toml`
+- `.codex/autocatalyst-models.example.toml`
+
+Those example files are templates that a target repo can copy or adapt. They do not become active policy until that target repo installs them as real config.
+
 ## What Gets Written To The Repo
 
 AutoCatalyst keeps its session state in the target repository, not in the skill bundle.

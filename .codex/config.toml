@@ -1,0 +1,9 @@
+# Repository policy for this AutoCatalyst skill repo.
+#
+# This file is normative for work in this repository.
+# It intentionally keeps subagent fan-out bounded and prevents child agents
+# from spawning further nested agent trees.
+
+[agents]
+max_threads = 6
+max_depth = 1
