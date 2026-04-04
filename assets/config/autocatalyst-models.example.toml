@@ -10,29 +10,29 @@
 # - If this file is absent, child agents inherit the parent/default model.
 
 [defaults]
-model = "gpt-5.4-mini"
-reasoning_effort = "medium"
-
-[roles.planner]
-model = "gpt-5.4-mini"
-reasoning_effort = "medium"
-
-[roles.researcher]
-model = "gpt-5.4-mini"
-reasoning_effort = "medium"
-
-[roles.critic]
-model = "gpt-5.4-mini"
-reasoning_effort = "medium"
-
-[roles.rewriter]
 model = "gpt-5.4"
 reasoning_effort = "high"
 
-[roles.synthesizer]
+[roles.planner]
 model = "gpt-5.4"
+reasoning_effort = "high"
+
+[roles.researcher]
+model = "gpt-5.4"
+reasoning_effort = "high"
+
+[roles.critic]
+model = "gpt-5.4"
+reasoning_effort = "medium"
+
+[roles.rewriter]
+model = "gpt-5.4-mini"
+reasoning_effort = "high"
+
+[roles.synthesizer]
+model = "gpt-5.4-mini"
 reasoning_effort = "high"
 
 [roles.judge]
 model = "gpt-5.4-mini"
-reasoning_effort = "medium"
+reasoning_effort = "high"
