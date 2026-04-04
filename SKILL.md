@@ -207,6 +207,33 @@ python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root 
 
 Use [references/subagents.md](references/subagents.md) for the exact role packets and example delegation language.
 
+## Respect runtime limits when spawning
+
+This skill runs under the repository's active Codex agent limits.
+
+In this repository, `.codex/config.toml` currently sets:
+
+- `max_threads = 6`
+- `max_depth = 1`
+
+Treat those values as a hard operational budget.
+
+Rules:
+
+- close stale, completed, or abandoned child agents before starting the next stage
+- do not leave critique, challenger, and judge threads open longer than needed
+- keep child depth flat; do not ask child agents to spawn their own agent trees
+- when headroom is unclear, prefer bounded batches over one large fan-out
+
+Practical consequence for blind judging:
+
+- a tribunal still needs three real judges
+- but it does **not** require spawning all three at the exact same moment
+- it is valid to run them as bounded batches such as `1 + 2` or `2 + 1`
+- aggregate only after all three real judgments are collected
+
+If the environment cannot supply enough headroom for the next required batch, stop and report the limitation instead of pretending the panel happened.
+
 ## Keep context packets narrow
 
 Pass only the minimum context each role needs.
@@ -298,7 +325,7 @@ For implementation tasks, treat passing tests as necessary but not always suffic
 
 ### 8. Run the tribunal
 
-For blind judging, spawn **three** `autocatalyst_judge` instances, anonymize the candidates, wait for all results, then aggregate the ranking conservatively.
+For blind judging, collect **three** real `autocatalyst_judge` results, anonymize the candidates, and aggregate the ranking conservatively. Under tight thread limits, run the panel in bounded batches instead of forcing all three judges to exist simultaneously.
 
 Tribunal order:
 
@@ -315,6 +342,19 @@ Use ranked choice or Borda-style aggregation when useful.
 - if `B` or `AB` wins, reset the survival streak and make the winner the new incumbent
 - update the canonical repo artifact only after the tribunal
 - record what won and why
+- write a human-readable round casefile for the winning round
+
+Recommended artifact:
+
+- `autocatalyst-artifacts/rounds/round-<n>-casefile.md`
+
+That file should be the cold-reader narrative of the round:
+
+- what the user wanted
+- what was wrong with the starting point
+- what contenders were explored
+- what the judges decided and why
+- what changed afterward
 
 ### 9.5. Check convergence before starting another round
 
@@ -380,6 +420,8 @@ If you log rounds with the helper, it will also refresh the Mermaid artifacts an
 ```bash
 python3 .agents/skills/autocatalyst/scripts/log_round.py --root . --round 1 --winner AB --status promote --winner-reason "AB merged the strongest ideas and clarified the next steps" --hard-checks pass
 ```
+
+When a round casefile exists, include it in the logged artifact paths. The HTML report should treat that casefile as the primary narrative and use JSONL and the other artifacts as supporting evidence.
 
 Use [references/artifact-templates.md](references/artifact-templates.md) for Mermaid-ready templates.
 

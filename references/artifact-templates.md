@@ -124,6 +124,38 @@ For text wireframes, use blocks, bullets, or ASCII layouts.
 - <Add recurring critiques here>
 ```
 
+## Round casefile template
+
+```markdown
+# Round <n> Casefile
+
+## Summary
+<One short paragraph explaining what this round changed and why it mattered>
+
+## The Ask
+<What the user wanted, in plain language>
+
+## The Situation Before The Round
+<What the incumbent was doing and why that was not good enough>
+
+## The Session Replay
+- <Meaningful event in order>
+- <Meaningful event in order>
+- <Meaningful event in order>
+
+## The Contenders
+<Short comparison of A, B, and AB as competing directions>
+
+## The Decision
+<Who won and why, in plain language>
+
+## The Outcome
+<What changed because of the decision>
+
+## Unknowns And Limits
+- <What is still unresolved>
+```
+
 ## Mermaid process overview template
 
 ````markdown

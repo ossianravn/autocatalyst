@@ -85,6 +85,24 @@ Typical profile split:
 - planner, researcher, critic, judge: `gpt-5.4-mini`
 - rewriter, synthesizer: `gpt-5.4`
 
+## Runtime limits and batching
+
+Always check the repo's active `.codex/config.toml` before assuming a fan-out pattern is safe.
+
+In this repository the active policy is:
+
+- `max_threads = 6`
+- `max_depth = 1`
+
+Operational rules:
+
+- close stale, completed, or abandoned child agents before spawning the next stage
+- keep only the current stage's agents alive
+- do not ask child agents to spawn more agents
+- when headroom is uncertain, prefer bounded batches over one broad burst
+
+Blind judging still requires three real judges, but those results may be gathered in bounded batches such as `1 + 2` or `2 + 1` and then aggregated after all three verdicts exist.
+
 ## Role packets
 
 Keep every packet narrow.
@@ -234,9 +252,10 @@ If a resolved profile exists for the synthesizer, pass its model and reasoning s
 ### Blind panel example
 
 ```text
-Spawn three autocatalyst_judge agents and wait for all of them.
+Collect three real autocatalyst_judge verdicts.
 Give each judge the anchor, rubric, and anonymized A/B/AB only.
 If a resolved judge profile exists, pass its model and reasoning settings to each judge spawn.
+Under thread pressure, run the judges in bounded batches and close completed judges before starting the next batch.
 Return each ranking and a consolidated winner.
 ```
 

@@ -75,8 +75,9 @@ Run all relevant hard gates before judging:
 ### 9. Blind tribunal
 
 - anonymize `A`, `B`, `AB`
-- spawn three judges
-- wait for all three results
+- collect three real judges
+- under thread limits, gather those verdicts in bounded batches rather than forcing all three judges to be alive at once
+- close completed or abandoned judges before starting the next batch
 - aggregate the rankings conservatively
 - keep `A` when the evidence is close
 
@@ -85,10 +86,24 @@ Run all relevant hard gates before judging:
 - if `A` wins, keep the incumbent and increment the survival streak
 - if `B` or `AB` wins, promote the winner and reset the streak
 - update the canonical artifact only after the tribunal
+- write a human-readable round casefile artifact before or alongside promotion
+
+Recommended file:
+
+- `autocatalyst-artifacts/rounds/round-<n>-casefile.md`
+
+That casefile should explain the round for a cold reader:
+
+- what the user wanted
+- what was wrong with the starting point
+- what contenders were compared
+- what the judges decided and why
+- what changed afterward
 
 ### 11. Logging and rendering
 
 - append one structured `round` row to `autocatalyst.jsonl`
+- include the round casefile artifact path in the logged artifacts when one exists
 - regenerate `autocatalyst-dashboard.md`
 - regenerate Mermaid flow artifacts
 - regenerate `autocatalyst-report.html`
