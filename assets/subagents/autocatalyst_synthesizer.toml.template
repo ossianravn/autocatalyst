@@ -12,8 +12,10 @@ Favor clarity, density, and coherence over coverage.
 Rules:
 - Do not concatenate A and B.
 - Do not keep material just to be fair to both inputs.
+- Include an element only if it clearly improves anchor alignment or usefully complements the stronger candidate.
 - If both versions of a section are weak, rewrite it or cut it.
 - If A and B conflict, resolve the conflict in favor of the anchor and the stronger execution.
+- It is acceptable for candidate AB to be mostly A or mostly B when one clearly dominates.
 - Eliminate stitched-together transitions, duplicated points, and redundant framing.
 - Avoid kitchen-sink synthesis.
 - Write only to the exact candidate-specific path or isolated worktree the parent gives you.

@@ -252,19 +252,23 @@ to:
 .codex/autocatalyst-models.toml
 ```
 
-Then adjust it. A typical split is:
+Then adjust it. The shipped example currently looks like:
 
 ```toml
 [defaults]
-model = "gpt-5.4-mini"
-reasoning_effort = "medium"
-
-[roles.rewriter]
 model = "gpt-5.4"
 reasoning_effort = "high"
 
+[roles.rewriter]
+model = "gpt-5.4-mini"
+reasoning_effort = "high"
+
 [roles.synthesizer]
-model = "gpt-5.4"
+model = "gpt-5.4-mini"
+reasoning_effort = "high"
+
+[roles.judge]
+model = "gpt-5.4-mini"
 reasoning_effort = "high"
 ```
 
@@ -300,26 +304,26 @@ The current values are:
 - `model = "gpt-5.4"`
 - `model_reasoning_effort = "high"`
 - `max_threads = 6`
-- `max_depth = 1`
+- `max_depth = 3`
 
 In plain language:
 
 - Codex in this repo defaults to `gpt-5.4` at `high` reasoning unless a more specific override is chosen
 - up to 6 agent threads can be active at once
-- child agents should not create deeper nested agent trees
+- child agents should keep nested agent trees shallow and intentional
 
 Why these values were chosen:
 
 - AutoCatalyst often needs a small panel instead of one helper, for example 3 judges in a blind tribunal or 3 agents in an evidence-mode vote.
 - `max_threads = 6` leaves room for that normal fan-out plus a little headroom without encouraging uncontrolled parallelism.
-- `max_depth = 1` keeps the workflow understandable: the main agent may spawn the AutoCatalyst role agents, but those child agents should not keep spawning their own child trees.
+- `max_depth = 3` leaves room for carefully controlled helper depth without turning the workflow into an unbounded recursive swarm.
 
 This matters because AutoCatalyst is designed to get fresh, bounded perspectives from a few narrowly scoped agents, not to create a large recursive swarm. The limit keeps cost, latency, and coordination overhead under control.
 
 What this means in practice:
 
 - a normal judging step with 3 judges fits comfortably inside the limit
-- an evidence-mode vote with planner + critic + 1 judge also fits comfortably
+- an evidence-mode decision can be handled by a dedicated selector without reusing the judge role
 - the skill can still do some bounded parallel read-heavy work
 - but it should avoid runaway fan-out and nested delegation chains
 
@@ -358,6 +362,24 @@ If you want repo-local hard checks, AutoCatalyst can use supported hooks such as
 - `autocatalyst.checks.cmd`
 - `autocatalyst.checks.bat`
 - `autocatalyst.checks.sh`
+
+## Runtime Requirements
+
+- Minimum supported Python version: `3.10`
+- Recommended Python version: `3.11+`
+
+Why:
+
+- the helpers use modern Python typing syntax
+- per-role model resolution reads TOML config
+
+If you run on Python `3.10`, install `tomli` so the TOML-reading helpers can parse `.toml` files. On Python `3.11+`, the standard library `tomllib` is enough.
+
+Important runtime caveat:
+
+- the generated `.codex/agents/*.toml` files describe the intended role and sandbox posture
+- the active Codex session still controls what child agents can actually do
+- if the parent session blocks network, approvals, or child depth, AutoCatalyst inherits that limitation at runtime
 
 ## Direct Script Entry Points
 
@@ -416,6 +438,25 @@ python3 .agents/skills/autocatalyst/scripts/run_checks.py --root .
 ```bash
 python3 .agents/skills/autocatalyst/scripts/log_round.py --root . --round 1 --winner AB --status promote --winner-reason "AB merged the strongest ideas and clarified the next steps" --hard-checks pass
 ```
+
+If the round used blinded judging, also log the tribunal structure explicitly so the report can show the panel basis instead of inferring it from filenames:
+
+- `--critic-output-artifact <path>` when you saved a structured critic output
+- `--researcher-output-artifact <path>` when you saved a structured researcher output
+- `--candidate-map-artifact <path>`
+- `--tribunal-summary-artifact <path>`
+- `--judge-verdict-artifact judge1=<path>` repeated per judge
+- `--judge-panel-ranking "judge1=Candidate 2>Candidate 1>Candidate 3"` repeated per judge
+- `--aggregation-method "<description>"`
+
+Judge, critic, and researcher outputs can now end with a structured JSON block. Use [validate_structured_output.py](/home/ossian/dev-sync/autocatalyst/scripts/validate_structured_output.py) if you want to verify those artifacts before logging them.
+
+In normal use, the parent does not need to thread all of those flags manually. If the relevant structured artifacts are already included in the `--artifact` list, [log_round.py](/home/ossian/dev-sync/autocatalyst/scripts/log_round.py) will auto-discover and ingest:
+
+- structured judge verdicts
+- structured critic outputs
+- structured researcher outputs
+- the tribunal-summary JSON companion next to `round-<n>-tribunal-summary.md`
 
 If the skill is installed globally instead of inside the repo, run the same bootstrap or helper scripts by absolute path, but still execute them from the target repo root and keep `--root .` pointed at that repo.
 

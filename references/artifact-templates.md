@@ -156,6 +156,110 @@ For text wireframes, use blocks, bullets, or ASCII layouts.
 - <What is still unresolved>
 ```
 
+## Tribunal summary template
+
+```markdown
+# Round <n> Tribunal Summary
+
+## Blind setup
+- candidate map: <path>
+- judge packet files:
+  - <path>
+  - <path>
+  - <path>
+
+## Verdict collection
+- judge 1: <pending or result path>
+- judge 2: <pending or result path>
+- judge 3: <pending or result path>
+
+## Aggregation
+- method: <majority / Borda / conservative promotion>
+- result: <winner>
+- note: <why the aggregation landed there>
+```
+
+## Structured tribunal summary template
+
+```json
+{
+  "schema": "autocatalyst.tribunal.v1",
+  "round": 1,
+  "candidateMapArtifact": "autocatalyst-artifacts/rounds/round-001-candidate-map.json",
+  "judgePackets": [
+    "autocatalyst-artifacts/rounds/round-001-judge-1-packet.md",
+    "autocatalyst-artifacts/rounds/round-001-judge-2-packet.md",
+    "autocatalyst-artifacts/rounds/round-001-judge-3-packet.md"
+  ],
+  "judgeVerdicts": [
+    {
+      "judge": "judge1",
+      "artifact": "autocatalyst-artifacts/rounds/round-001-judge-1-verdict.md",
+      "ranking": ["Candidate 2", "Candidate 1", "Candidate 3"],
+      "winner": "Candidate 2",
+      "rationale": "Candidate 2 best matched the rubric overall.",
+      "blockers": []
+    }
+  ],
+  "aggregationMethod": "majority ranking after unblinding",
+  "result": "AB",
+  "note": "AB carried the panel after unblinding."
+}
+```
+
+## Structured judge output template
+
+````markdown
+## Structured Output
+
+```json
+{
+  "schema": "autocatalyst.judge.v1",
+  "ranking": ["Candidate 2", "Candidate 1", "Candidate 3"],
+  "winner": "Candidate 2",
+  "rationale": "Candidate 2 matched the rubric best overall.",
+  "blockers": []
+}
+```
+````
+
+## Structured critic output template
+
+````markdown
+## Structured Output
+
+```json
+{
+  "schema": "autocatalyst.critic.v1",
+  "rewriteWarranted": true,
+  "hardBlockers": ["The current README never explains what the skill does to a first-time user."],
+  "softConcerns": ["The examples are denser than they need to be."],
+  "suggestedRubricItems": ["Must explain the core purpose before comparing workflow variants."]
+}
+```
+````
+
+## Structured researcher output template
+
+````markdown
+## Structured Output
+
+```json
+{
+  "schema": "autocatalyst.researcher.v1",
+  "confirmedFacts": [
+    {
+      "claim": "The repo has no GitHub Actions workflows.",
+      "citation": "[.github/] missing"
+    }
+  ],
+  "unresolvedQuestions": ["Whether Windows bootstrap behavior has been smoke-tested outside local manual runs."],
+  "implications": ["The repo needs automated platform coverage before making platform support claims."],
+  "conflicts": []
+}
+```
+````
+
 ## Mermaid process overview template
 
 ````markdown

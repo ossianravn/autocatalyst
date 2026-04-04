@@ -378,6 +378,7 @@ def collect_summary(config: dict[str, Any], rounds: list[dict[str, Any]]) -> dic
     for round_row in rounds:
         promotions.extend(as_list(round_row.get("promotions")))
         artifact_paths.extend(as_list(round_row.get("artifacts")))
+        artifact_paths.extend(tribunal_artifact_paths(round_row))
         agent_names.extend(as_list(round_row.get("agentNames")))
         if bool(round_row.get("degradedMode")):
             degraded_count += 1
@@ -440,6 +441,16 @@ def render_dashboard(root: Path) -> str:
             lines.append(
                 f"- Latest round: #{latest.get('round')} winner={latest.get('winner')} status={latest.get('status')} — {sanitize(latest.get('winnerReason', ''))}"
             )
+            latest_tribunal = normalize_tribunal(latest)
+            latest_verdicts = latest_tribunal.get("judgeVerdicts", [])
+            latest_aggregation = latest_tribunal.get("aggregationMethod", "")
+            if latest_verdicts or latest_aggregation:
+                tribunal_bits = []
+                if latest_verdicts:
+                    tribunal_bits.append(f"{len(latest_verdicts)} judge verdicts")
+                if latest_aggregation:
+                    tribunal_bits.append(f"aggregation={latest_aggregation}")
+                lines.append(f"- Latest tribunal: {', '.join(tribunal_bits)}")
         lines.append(f"- Convergence: {convergence['reason']}")
     else:
         lines.append("- No rounds logged yet.")
@@ -470,6 +481,98 @@ def render_dashboard(root: Path) -> str:
             lines.append(f"- {path}")
     else:
         lines.append("- none logged yet")
+    lines.append("")
+
+    lines.append("## Latest tribunal")
+    lines.append("")
+    if latest:
+        latest_tribunal = normalize_tribunal(latest)
+        latest_grouped = tribunal_round_artifacts(latest)
+        if latest_tribunal.get("candidateMapArtifact"):
+            lines.append(f"- candidate map: {latest_tribunal['candidateMapArtifact']}")
+        if latest_tribunal.get("summaryDataArtifact"):
+            lines.append(f"- structured summary: {latest_tribunal['summaryDataArtifact']}")
+        for packet in latest_tribunal.get("judgePackets", []):
+            lines.append(f"- judge packet: {packet}")
+        for packet in latest_grouped["judge_packet"]:
+            if packet not in latest_tribunal.get("judgePackets", []):
+                lines.append(f"- judge packet: {packet}")
+        for verdict in latest_tribunal.get("judgeVerdicts", []):
+            judge_name = display_judge_name(str(verdict.get("judge", "judge")))
+            ranking = " > ".join(as_list(verdict.get("ranking")))
+            suffix = f" ({ranking})" if ranking else ""
+            if verdict.get("artifact"):
+                lines.append(f"- {judge_name}: {verdict['artifact']}{suffix}")
+        if latest_tribunal.get("summaryArtifact"):
+            lines.append(f"- tribunal summary: {latest_tribunal['summaryArtifact']}")
+        if latest_tribunal.get("aggregationMethod"):
+            lines.append(f"- aggregation method: {latest_tribunal['aggregationMethod']}")
+        if latest_tribunal.get("result"):
+            lines.append(f"- result: {latest_tribunal['result']}")
+        if latest_tribunal.get("note"):
+            lines.append(f"- note: {latest_tribunal['note']}")
+        if not any(
+            [
+                latest_tribunal.get("candidateMapArtifact"),
+                latest_tribunal.get("summaryDataArtifact"),
+                latest_grouped["judge_packet"],
+                latest_tribunal.get("judgePackets", []),
+                latest_tribunal.get("judgeVerdicts", []),
+                latest_tribunal.get("summaryArtifact"),
+                latest_tribunal.get("aggregationMethod"),
+            ]
+        ):
+            lines.append("- none logged for the latest round")
+    else:
+        lines.append("- none logged yet")
+    lines.append("")
+
+    lines.append("## Latest critic")
+    lines.append("")
+    if latest and isinstance(latest.get("critic"), dict):
+        critic = latest["critic"]
+        if critic.get("artifact"):
+            lines.append(f"- artifact: {critic['artifact']}")
+        lines.append(f"- rewrite warranted: {'yes' if bool(critic.get('rewriteWarranted')) else 'no'}")
+        for field, label in (
+            ("hardBlockers", "hard blockers"),
+            ("softConcerns", "soft concerns"),
+            ("suggestedRubricItems", "suggested rubric items"),
+        ):
+            values = as_list(critic.get(field))
+            if values:
+                lines.append(f"- {label}: {'; '.join(values)}")
+    else:
+        lines.append("- none logged for the latest round")
+    lines.append("")
+
+    lines.append("## Latest research")
+    lines.append("")
+    if latest and isinstance(latest.get("research"), dict):
+        research = latest["research"]
+        if research.get("artifact"):
+            lines.append(f"- artifact: {research['artifact']}")
+        confirmed = research.get("confirmedFacts", [])
+        if isinstance(confirmed, list) and confirmed:
+            fact_bits = []
+            for item in confirmed[:3]:
+                if isinstance(item, dict):
+                    claim = str(item.get("claim", "")).strip()
+                    citation = str(item.get("citation", "")).strip()
+                    if claim and citation:
+                        fact_bits.append(f"{claim} [{citation}]")
+            if fact_bits:
+                lines.append(f"- confirmed facts: {'; '.join(fact_bits)}")
+        for field, label in (
+            ("unresolvedQuestions", "open questions"),
+            ("implications", "implications"),
+            ("conflicts", "conflicts"),
+        ):
+            values = as_list(research.get(field))
+            if values:
+                lines.append(f"- {label}: {'; '.join(values)}")
+    else:
+        lines.append("- none logged for the latest round")
     lines.append("")
 
     lines.append("## Rounds")
@@ -577,6 +680,155 @@ def html_link_list(items: list[str], empty: str = "none") -> str:
     for item in items:
         href = rel_href(item)
         lines.append(f'  <li><a href="{href}">{escape(item)}</a></li>')
+    lines.append("</ul>")
+    return "\n".join(lines)
+
+
+def render_tribunal_snapshot(root: Path, latest_story: dict[str, Any] | None) -> str:
+    if not latest_story:
+        return '<p class="empty-state">No latest round is available yet.</p>'
+
+    tribunal = latest_story.get("tribunal", {})
+    grouped = tribunal_round_artifacts({"artifacts": latest_story.get("artifacts", []), "tribunal": tribunal})
+    judge_verdicts = tribunal.get("judgeVerdicts", []) if isinstance(tribunal, dict) else []
+    aggregation = tribunal.get("aggregationMethod", "") if isinstance(tribunal, dict) else ""
+    candidate_map = str(tribunal.get("candidateMapArtifact", "")).strip() if isinstance(tribunal, dict) else ""
+    summary_artifact = str(tribunal.get("summaryArtifact", "")).strip() if isinstance(tribunal, dict) else ""
+    summary_data_artifact = str(tribunal.get("summaryDataArtifact", "")).strip() if isinstance(tribunal, dict) else ""
+    summary_note_text = str(tribunal.get("note", "")).strip() if isinstance(tribunal, dict) else ""
+    tribunal_result = str(tribunal.get("result", "")).strip() if isinstance(tribunal, dict) else ""
+
+    if not any(
+        [
+            candidate_map,
+            summary_artifact,
+            summary_data_artifact,
+            judge_verdicts,
+            grouped["judge_packet"],
+            grouped["judge_verdict"],
+            grouped["candidate_map"],
+            grouped["tribunal_summary"],
+        ]
+    ):
+        return '<p class="empty-state">No tribunal artifacts were logged for the latest round.</p>'
+
+    lines = ['<ul class="plain-list">']
+    if candidate_map:
+        lines.append(
+            f'  <li><strong>Candidate map.</strong> <a href="{rel_href(candidate_map)}">{escape(candidate_map)}</a> keeps the unblinding information on the parent side only.</li>'
+        )
+
+    judge_packets = grouped["judge_packet"]
+    if judge_packets:
+        lines.append(
+            f"  <li><strong>Blind packets.</strong> {len(judge_packets)} packet(s) were prepared so each judge saw the same contenders under permuted aliases.</li>"
+        )
+
+    if summary_artifact:
+        summary_excerpt = read_markdown_summary(root / summary_artifact)
+        summary_note = f" {escape(summary_excerpt)}" if summary_excerpt else ""
+        lines.append(
+            f'  <li><strong>Tribunal summary.</strong> <a href="{rel_href(summary_artifact)}">{escape(summary_artifact)}</a>{summary_note}</li>'
+        )
+    if summary_data_artifact:
+        lines.append(
+            f'  <li><strong>Structured summary.</strong> <a href="{rel_href(summary_data_artifact)}">{escape(summary_data_artifact)}</a></li>'
+        )
+
+    if judge_verdicts:
+        for item in judge_verdicts:
+            judge_name = display_judge_name(str(item.get("judge", "judge")))
+            artifact = str(item.get("artifact", "")).strip()
+            ranking = " > ".join(as_list(item.get("ranking")))
+            rationale = str(item.get("rationale", "")).strip()
+            winner = str(item.get("winner", "")).strip()
+            blockers = item.get("blockers", []) if isinstance(item.get("blockers", []), list) else []
+            if artifact:
+                link = f'<a href="{rel_href(artifact)}">{escape(artifact)}</a>'
+            else:
+                link = "verdict path not logged"
+            ranking_note = f" Ranking: {escape(ranking)}." if ranking else ""
+            winner_note = f" Winner: {escape(winner)}." if winner else ""
+            rationale_note = f" {escape(rationale)}" if rationale else ""
+            blocker_note = ""
+            if blockers:
+                blocker_bits = []
+                for blocker in blockers:
+                    if isinstance(blocker, dict):
+                        candidate = str(blocker.get("candidate", "")).strip()
+                        reason = str(blocker.get("reason", "")).strip()
+                        if candidate and reason:
+                            blocker_bits.append(f"{candidate}: {reason}")
+                if blocker_bits:
+                    blocker_note = " Blockers: " + "; ".join(escape(bit) for bit in blocker_bits) + "."
+            lines.append(
+                f"  <li><strong>{escape(judge_name)}.</strong> {link}.{ranking_note}{winner_note}{rationale_note}{blocker_note}</li>"
+            )
+    elif grouped["judge_verdict"]:
+        for artifact in grouped["judge_verdict"]:
+            lines.append(
+                f'  <li><strong>Judge verdict.</strong> <a href="{rel_href(artifact)}">{escape(artifact)}</a></li>'
+            )
+
+    if aggregation:
+        lines.append(f"  <li><strong>Aggregation method.</strong> {escape(aggregation)}</li>")
+    if tribunal_result:
+        lines.append(f"  <li><strong>Panel result.</strong> {escape(tribunal_result)}</li>")
+    if summary_note_text:
+        lines.append(f"  <li><strong>Panel note.</strong> {escape(summary_note_text)}</li>")
+
+    lines.append("</ul>")
+    return "\n".join(lines)
+
+
+def render_role_output_snapshot(round_row: dict[str, Any], role_key: str) -> str:
+    payload = round_row.get(role_key)
+    if not isinstance(payload, dict):
+        if role_key == "critic":
+            return '<p class="empty-state">No structured critic output was logged for the latest round.</p>'
+        if role_key == "research":
+            return '<p class="empty-state">No structured researcher output was logged for the latest round.</p>'
+        return '<p class="empty-state">No structured role output was logged.</p>'
+
+    artifact = str(payload.get("artifact", "")).strip()
+    lines = ['<ul class="plain-list">']
+    if artifact:
+        lines.append(f'  <li><strong>Artifact.</strong> <a href="{rel_href(artifact)}">{escape(artifact)}</a></li>')
+
+    if role_key == "critic":
+        rewrite_warranted = "yes" if bool(payload.get("rewriteWarranted")) else "no"
+        lines.append(f"  <li><strong>Rewrite warranted.</strong> {rewrite_warranted}</li>")
+        hard_blockers = as_list(payload.get("hardBlockers"))
+        soft_concerns = as_list(payload.get("softConcerns"))
+        rubric_items = as_list(payload.get("suggestedRubricItems"))
+        if hard_blockers:
+            lines.append(f"  <li><strong>Hard blockers.</strong> {escape('; '.join(hard_blockers))}</li>")
+        if soft_concerns:
+            lines.append(f"  <li><strong>Soft concerns.</strong> {escape('; '.join(soft_concerns))}</li>")
+        if rubric_items:
+            lines.append(f"  <li><strong>Suggested rubric items.</strong> {escape('; '.join(rubric_items))}</li>")
+    elif role_key == "research":
+        confirmed = payload.get("confirmedFacts", [])
+        unresolved = as_list(payload.get("unresolvedQuestions"))
+        implications = as_list(payload.get("implications"))
+        conflicts = as_list(payload.get("conflicts"))
+        if isinstance(confirmed, list) and confirmed:
+            fact_bits = []
+            for item in confirmed[:3]:
+                if isinstance(item, dict):
+                    claim = str(item.get("claim", "")).strip()
+                    citation = str(item.get("citation", "")).strip()
+                    if claim and citation:
+                        fact_bits.append(f"{claim} [{citation}]")
+            if fact_bits:
+                lines.append(f"  <li><strong>Confirmed facts.</strong> {escape('; '.join(fact_bits))}</li>")
+        if unresolved:
+            lines.append(f"  <li><strong>Open questions.</strong> {escape('; '.join(unresolved))}</li>")
+        if implications:
+            lines.append(f"  <li><strong>Implications.</strong> {escape('; '.join(implications))}</li>")
+        if conflicts:
+            lines.append(f"  <li><strong>Conflicts.</strong> {escape('; '.join(conflicts))}</li>")
+
     lines.append("</ul>")
     return "\n".join(lines)
 
@@ -1142,10 +1394,134 @@ def classify_artifact(path_str: str) -> str | None:
     return None
 
 
+def classify_tribunal_artifact(path_str: str) -> str | None:
+    lowered = path_str.lower()
+    if "candidate-map" in lowered:
+        return "candidate_map"
+    if "tribunal-summary" in lowered:
+        return "tribunal_summary"
+    if "judge-" in lowered and "packet" in lowered:
+        return "judge_packet"
+    if "judge-" in lowered and "verdict" in lowered:
+        return "judge_verdict"
+    return None
+
+
+def tribunal_artifact_paths(round_row: dict[str, Any]) -> list[str]:
+    tribunal = round_row.get("tribunal")
+    if not isinstance(tribunal, dict):
+        return []
+
+    paths: list[str] = []
+    for key in ("candidateMapArtifact", "summaryArtifact", "summaryDataArtifact"):
+        value = str(tribunal.get(key, "")).strip()
+        if value:
+            paths.append(value)
+
+    for packet in as_list(tribunal.get("judgePackets")):
+        if packet:
+            paths.append(packet)
+
+    raw_verdicts = tribunal.get("judgeVerdicts", [])
+    if isinstance(raw_verdicts, list):
+        for item in raw_verdicts:
+            if isinstance(item, dict):
+                value = str(item.get("artifact", "")).strip()
+                if value:
+                    paths.append(value)
+            elif isinstance(item, str):
+                value = item.strip()
+                if value:
+                    paths.append(value)
+
+    return list(dict.fromkeys(paths))
+
+
+def normalize_tribunal(round_row: dict[str, Any]) -> dict[str, Any]:
+    tribunal = round_row.get("tribunal")
+    if not isinstance(tribunal, dict):
+        return {
+            "candidateMapArtifact": "",
+            "summaryArtifact": "",
+            "summaryDataArtifact": "",
+            "judgePackets": [],
+            "aggregationMethod": "",
+            "result": "",
+            "note": "",
+            "judgeVerdicts": [],
+        }
+
+    judge_verdicts: list[dict[str, Any]] = []
+    raw_verdicts = tribunal.get("judgeVerdicts", [])
+    if isinstance(raw_verdicts, list):
+        for index, item in enumerate(raw_verdicts, start=1):
+            if isinstance(item, dict):
+                judge = str(item.get("judge", f"judge{index}")).strip() or f"judge{index}"
+                artifact = str(item.get("artifact", "")).strip()
+                ranking = as_list(item.get("ranking"))
+                judge_verdicts.append(
+                    {
+                        "judge": judge,
+                        "artifact": artifact,
+                        "ranking": ranking,
+                        "winner": str(item.get("winner", "")).strip(),
+                        "rationale": str(item.get("rationale", "")).strip(),
+                        "blockers": item.get("blockers", []) if isinstance(item.get("blockers", []), list) else [],
+                    }
+                )
+            elif isinstance(item, str) and item.strip():
+                judge_verdicts.append(
+                    {
+                        "judge": f"judge{index}",
+                        "artifact": item.strip(),
+                        "ranking": [],
+                        "winner": "",
+                        "rationale": "",
+                        "blockers": [],
+                    }
+                )
+
+    return {
+        "candidateMapArtifact": str(tribunal.get("candidateMapArtifact", "")).strip(),
+        "summaryArtifact": str(tribunal.get("summaryArtifact", "")).strip(),
+        "summaryDataArtifact": str(tribunal.get("summaryDataArtifact", "")).strip(),
+        "judgePackets": as_list(tribunal.get("judgePackets")),
+        "aggregationMethod": str(tribunal.get("aggregationMethod", "")).strip(),
+        "result": str(tribunal.get("result", "")).strip(),
+        "note": str(tribunal.get("note", "")).strip(),
+        "judgeVerdicts": judge_verdicts,
+    }
+
+
+def display_judge_name(name: str) -> str:
+    lowered = name.lower().replace("-", "")
+    if lowered.startswith("judge") and lowered[5:].isdigit():
+        return f"Judge {lowered[5:]}"
+    return name.replace("-", " ").title()
+
+
+def tribunal_round_artifacts(round_row: dict[str, Any]) -> dict[str, list[str]]:
+    grouped = {
+        "candidate_map": [],
+        "tribunal_summary": [],
+        "judge_packet": [],
+        "judge_verdict": [],
+    }
+    for path in as_list(round_row.get("artifacts")) + tribunal_artifact_paths(round_row):
+        kind = classify_tribunal_artifact(path)
+        if kind:
+            grouped[kind].append(path)
+
+    for key, items in grouped.items():
+        grouped[key] = list(dict.fromkeys(items))
+    return grouped
+
+
 def collect_round_story(root: Path, round_row: dict[str, Any]) -> dict[str, Any]:
     artifact_paths = as_list(round_row.get("artifacts"))
     summaries: dict[str, str] = {}
     story_path: str | None = None
+    tribunal = normalize_tribunal(round_row)
     for path_str in artifact_paths:
         kind = classify_artifact(path_str)
         if not kind:
@@ -1207,6 +1583,7 @@ def collect_round_story(root: Path, round_row: dict[str, Any]) -> dict[str, Any]
         "incumbentAfter": str(round_row.get("incumbentAfter", "")).strip(),
         "rowSpan": round_row.get("__sourceSpan"),
         "storyPath": story_path,
+        "tribunal": tribunal,
     }
 
 
@@ -1309,6 +1686,7 @@ def render_html_report(root: Path) -> str:
     brief = extract_session_brief(root)
     convergence = convergence_status(config, rounds)
     generated_at = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    latest = summary["latest"]
     stories = [collect_round_story(root, round_row) for round_row in rounds]
     latest_story = stories[-1] if stories else None
     authored_story = extract_story_artifact(story_artifact_path(root, rounds[-1])) if rounds else None
@@ -1504,6 +1882,14 @@ def render_html_report(root: Path) -> str:
 
     if latest_story and authored_story and authored_story.get("decision"):
         verdict_reason = authored_story["decision"]
+        latest_tribunal = latest_story.get("tribunal", {})
+        tribunal_meta = []
+        judge_verdicts = latest_tribunal.get("judgeVerdicts", []) if isinstance(latest_tribunal, dict) else []
+        aggregation_method = latest_tribunal.get("aggregationMethod", "") if isinstance(latest_tribunal, dict) else ""
+        if judge_verdicts:
+            tribunal_meta.append(f"<div><dt>Blind judges</dt><dd>{len(judge_verdicts)} verdicts logged</dd></div>")
+        if aggregation_method:
+            tribunal_meta.append(f"<div><dt>Aggregation</dt><dd>{escape(aggregation_method)}</dd></div>")
         decision_html = f"""
         <div class="verdict">
           <p class="verdict-label">Winning direction</p>
@@ -1514,10 +1900,19 @@ def render_html_report(root: Path) -> str:
             <div><dt>Status</dt><dd>{escape(latest_story["status"])}</dd></div>
             <div><dt>Hard checks</dt><dd>{escape(latest_story["hardChecks"])}</dd></div>
             <div><dt>Convergence</dt><dd>{escape(convergence['decision'])} ({escape(str(convergence['currentSurvivalStreak']))}/{escape(str(summary['survival_target']))})</dd></div>
+            {''.join(tribunal_meta)}
           </dl>
         </div>
         """
     elif latest_story:
+        latest_tribunal = latest_story.get("tribunal", {})
+        tribunal_meta = []
+        judge_verdicts = latest_tribunal.get("judgeVerdicts", []) if isinstance(latest_tribunal, dict) else []
+        aggregation_method = latest_tribunal.get("aggregationMethod", "") if isinstance(latest_tribunal, dict) else ""
+        if judge_verdicts:
+            tribunal_meta.append(f"<div><dt>Blind judges</dt><dd>{len(judge_verdicts)} verdicts logged</dd></div>")
+        if aggregation_method:
+            tribunal_meta.append(f"<div><dt>Aggregation</dt><dd>{escape(aggregation_method)}</dd></div>")
         decision_html = f"""
         <div class="verdict">
           <p class="verdict-label">Winning direction</p>
@@ -1528,6 +1923,7 @@ def render_html_report(root: Path) -> str:
             <div><dt>Status</dt><dd>{escape(latest_story["status"])}</dd></div>
             <div><dt>Hard checks</dt><dd>{escape(latest_story["hardChecks"])}</dd></div>
             <div><dt>Convergence</dt><dd>{escape(convergence['decision'])} ({escape(str(convergence['currentSurvivalStreak']))}/{escape(str(summary['survival_target']))})</dd></div>
+            {''.join(tribunal_meta)}
           </dl>
         </div>
         """
@@ -1552,6 +1948,26 @@ def render_html_report(root: Path) -> str:
 
     unknowns = collect_unknowns(config, rounds, brief)
     artifacts = summary["artifact_paths"]
+    latest_tribunal_html = render_tribunal_snapshot(root, latest_story)
+    latest_critic_html = render_role_output_snapshot(latest or {}, "critic")
+    latest_research_html = render_role_output_snapshot(latest or {}, "research")
+    latest_tribunal_paths = []
+    latest_role_artifacts = []
+    if isinstance(latest, dict):
+        for role_key in ("critic", "research"):
+            payload = latest.get(role_key)
+            if isinstance(payload, dict):
+                artifact = str(payload.get("artifact", "")).strip()
+                if artifact:
+                    latest_role_artifacts.append(artifact)
+    if latest_story:
+        latest_tribunal_paths = list(
+            dict.fromkeys(tribunal_round_artifacts({"artifacts": latest_story.get("artifacts", []), "tribunal": latest_story.get("tribunal", {})})["candidate_map"]
+            + tribunal_round_artifacts({"artifacts": latest_story.get("artifacts", []), "tribunal": latest_story.get("tribunal", {})})["tribunal_summary"]
+            + tribunal_round_artifacts({"artifacts": latest_story.get("artifacts", []), "tribunal": latest_story.get("tribunal", {})})["judge_packet"]
+            + tribunal_round_artifacts({"artifacts": latest_story.get("artifacts", []), "tribunal": latest_story.get("tribunal", {})})["judge_verdict"])
+        )
+    generic_artifacts = [path for path in artifacts if path not in latest_tribunal_paths and path not in latest_role_artifacts]
     source_files = [
         "autocatalyst.jsonl",
         "autocatalyst.md",
@@ -1945,8 +2361,20 @@ def render_html_report(root: Path) -> str:
               {html_link_list(source_files, empty='No core report files are available.')}
             </div>
             <div class="drawer-block">
+              <h3>Latest tribunal</h3>
+              {latest_tribunal_html}
+            </div>
+            <div class="drawer-block">
+              <h3>Latest critic</h3>
+              {latest_critic_html}
+            </div>
+            <div class="drawer-block">
+              <h3>Latest research</h3>
+              {latest_research_html}
+            </div>
+            <div class="drawer-block">
               <h3>Round artifacts</h3>
-              {html_link_list(artifacts, empty='No round artifacts were linked.')}
+              {html_link_list(generic_artifacts, empty='No non-tribunal round artifacts were linked.')}
             </div>
             <div class="drawer-block">
               <h3>Logged agents</h3>

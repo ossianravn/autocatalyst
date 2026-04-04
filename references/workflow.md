@@ -74,12 +74,25 @@ Run all relevant hard gates before judging:
 
 ### 9. Blind tribunal
 
-- anonymize `A`, `B`, `AB`
+- prepare per-judge blinded candidate aliases
 - collect three real judges
 - under thread limits, gather those verdicts in bounded batches rather than forcing all three judges to be alive at once
 - close completed or abandoned judges before starting the next batch
 - aggregate the rankings conservatively
 - keep `A` when the evidence is close
+
+Prefer using the helper when you want a repeatable setup:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/prepare_judge_packets.py --root . --round 1 --anchor autocatalyst.md --rubric autocatalyst-rubric.md --candidate A=path/to/a.md --candidate B=path/to/b.md --candidate AB=path/to/ab.md
+```
+
+That helper creates:
+
+- per-judge blinded packet files
+- a parent-only candidate map
+- a tribunal summary markdown stub
+- a parseable tribunal summary JSON companion
 
 ### 10. Promotion
 
@@ -104,6 +117,7 @@ That casefile should explain the round for a cold reader:
 
 - append one structured `round` row to `autocatalyst.jsonl`
 - include the round casefile artifact path in the logged artifacts when one exists
+- include tribunal artifacts such as judge packets, candidate maps, verdicts, and tribunal summaries when they exist
 - regenerate `autocatalyst-dashboard.md`
 - regenerate Mermaid flow artifacts
 - regenerate `autocatalyst-report.html`
@@ -158,6 +172,24 @@ Use these fields consistently when possible:
 - `winnerReason`: short explanation
 - `hardChecks`: `pass|fail|mixed|na`
 - `judgeRanking`: ordered list such as `A,AB,B`
+- `critic.artifact`: saved critic output artifact when a structured critic output was logged
+- `critic.rewriteWarranted`: boolean
+- `critic.hardBlockers`: structured hard blockers
+- `critic.softConcerns`: structured soft concerns
+- `critic.suggestedRubricItems`: structured rubric candidates
+- `research.artifact`: saved researcher output artifact when a structured evidence packet was logged
+- `research.confirmedFacts`: structured facts with citations
+- `research.unresolvedQuestions`: unresolved questions
+- `research.implications`: decision-relevant implications
+- `research.conflicts`: structured conflicts or disagreements
+- `tribunal.candidateMapArtifact`: parent-only unblinding map when blind packets were used
+- `tribunal.summaryArtifact`: tribunal aggregation summary artifact
+- `tribunal.summaryDataArtifact`: parseable tribunal summary companion
+- `tribunal.judgePackets`: judge packet artifact paths
+- `tribunal.aggregationMethod`: how the panel result was combined after unblinding
+- `tribunal.result`: final panel result after unblinding
+- `tribunal.note`: short aggregation note
+- `tribunal.judgeVerdicts`: per-judge verdict artifact paths plus structured ranking, winner, rationale, and blockers when available
 - `incumbentBefore`: path or label
 - `incumbentAfter`: path or label
 - `artifacts`: output files written this round
@@ -166,6 +198,26 @@ Use these fields consistently when possible:
 - `agentNames`: names of the agents that actually ran
 
 The helper script handles the JSON structure for you.
+
+When a round used blinded packets, prefer logging the tribunal structure explicitly instead of leaving it implicit in loose artifact names. `log_round.py` still supports explicit flags, but it can now also auto-discover structured judge / critic / researcher outputs and the tribunal companion from the artifact paths you pass.
+
+Explicit flags remain available when you want to override or supplement auto-discovery:
+
+- `--critic-output-artifact <path>` for a saved structured critic output
+- `--researcher-output-artifact <path>` for a saved structured researcher output
+- `--candidate-map-artifact <path>`
+- `--tribunal-summary-artifact <path>`
+- `--judge-verdict-artifact judge1=<path>` repeated per judge
+- `--judge-panel-ranking "judge1=Candidate 2>Candidate 1>Candidate 3"` repeated per judge
+- `--aggregation-method "<description>"`
+
+If you pass `round-<n>-tribunal-summary.md` in the artifact list and the matching `round-<n>-tribunal-summary.json` companion exists, `log_round.py` will infer the companion automatically.
+
+For judge, critic, or researcher outputs that are saved to disk for later aggregation, prefer the role schemas documented in [references/subagents.md](subagents.md) and validate them with:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/validate_structured_output.py --role judge --file /path/to/output.md
+```
 
 ## Convergence
 

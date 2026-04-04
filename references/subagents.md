@@ -43,6 +43,7 @@ If the repository moves to a new absolute path, rerun the bootstrap or install s
 
 Use these agents:
 
+- `autocatalyst_selector`
 - `autocatalyst_planner`
 - `autocatalyst_researcher`
 - `autocatalyst_critic`
@@ -52,6 +53,7 @@ Use these agents:
 
 Use exactly these responsibilities:
 
+- **selector**: choose the evidence mode and tribunal posture
 - **planner**: classify task class, recommend evidence mode, draft the round plan
 - **researcher**: gather evidence and citations, not solutions
 - **critic**: attack the incumbent, problems only
@@ -82,8 +84,9 @@ python3 .agents/skills/autocatalyst/scripts/resolve_subagent_profiles.py --root 
 
 Typical profile split:
 
-- planner, researcher, critic, judge: `gpt-5.4-mini`
-- rewriter, synthesizer: `gpt-5.4`
+- selector, planner, researcher: `gpt-5.4`
+- critic: `gpt-5.4` with lighter reasoning when appropriate
+- rewriter, synthesizer, judge: see `.codex/autocatalyst-models.toml` or the example file
 
 ## Runtime limits and batching
 
@@ -92,7 +95,7 @@ Always check the repo's active `.codex/config.toml` before assuming a fan-out pa
 In this repository the active policy is:
 
 - `max_threads = 6`
-- `max_depth = 1`
+- `max_depth = 3`
 
 Operational rules:
 
@@ -125,6 +128,23 @@ Request:
 - candidate-isolation plan
 - suggested artifact paths
 - initial rubric headings
+
+### Selector packet
+
+Include:
+
+- task statement
+- audience
+- deliverables
+- hard constraints
+- repo paths or screenshots that matter
+
+Request:
+
+- evidence-mode choice
+- short rationale
+- main decision signal
+- missing inputs if the task is underspecified
 
 ### Researcher packet
 
@@ -198,7 +218,7 @@ Include only:
 
 - anchor
 - rubric
-- anonymized candidates `A`, `B`, `AB`
+- per-judge blinded candidate aliases only
 
 Request:
 
@@ -206,6 +226,7 @@ Request:
 - winner
 - short rationale
 - blocker callout if something disqualifies a candidate
+- final structured JSON block using schema `autocatalyst.judge.v1`
 
 Do not reveal or mention any author labels, earlier verdicts, or internal process history.
 
@@ -217,11 +238,10 @@ Use direct language that explicitly tells Codex to spawn agents and wait.
 
 ```text
 Spawn three subagents and wait for all of them:
-1. autocatalyst_planner
-2. autocatalyst_critic
-3. one autocatalyst_judge
-Give each the same anchor packet and ask it to choose judge-first, benchmark-first, or hybrid.
-Return each vote and the majority result.
+1. autocatalyst_selector
+Give it the anchor packet only.
+Ask it to choose judge-first, benchmark-first, or hybrid and explain why.
+Return the evidence-mode choice and any missing inputs it flags.
 ```
 
 ### Critique example
@@ -231,6 +251,7 @@ Spawn autocatalyst_critic and wait for the result.
 Give it the anchor and incumbent A only.
 If a resolved profile exists for the critic, pass its model and reasoning settings explicitly.
 Require a problems-only critique: severe issues first, no fixes, no rewrite.
+Require the final response to end with the structured JSON block described by the critic schema.
 ```
 
 ### Challenger example
@@ -253,17 +274,39 @@ If a resolved profile exists for the synthesizer, pass its model and reasoning s
 
 ```text
 Collect three real autocatalyst_judge verdicts.
-Give each judge the anchor, rubric, and anonymized A/B/AB only.
+Give each judge the anchor, rubric, and a per-judge blinded candidate packet only.
 If a resolved judge profile exists, pass its model and reasoning settings to each judge spawn.
 Under thread pressure, run the judges in bounded batches and close completed judges before starting the next batch.
 Return each ranking and a consolidated winner.
 ```
+
+## Structured output blocks
+
+For roles whose outputs are later aggregated, prefer a dual-format response:
+
+1. a short human-readable result
+2. a final `## Structured Output` section containing one fenced `json` block
+
+Current recommended schemas:
+
+- judge: `autocatalyst.judge.v1`
+- critic: `autocatalyst.critic.v1`
+- researcher: `autocatalyst.researcher.v1`
+
+If you save one of those outputs to disk, validate it with:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/validate_structured_output.py --role judge --file /path/to/output.md
+```
+
+Swap `judge` for `critic` or `researcher` as needed.
 
 ## Blind judging rules
 
 Enforce all of these:
 
 - anonymize candidate labels consistently
+- permute candidate order separately for each judge when possible
 - do not tell the judges which candidate is the incumbent
 - do not show judges one another’s verdicts before they decide
 - do not show judges the critique, research notes, or implementation history unless that is part of the artifact being judged
@@ -305,3 +348,16 @@ In degraded mode:
 - identify the missing delegation step,
 - avoid claiming a real panel or fresh critique existed,
 - wait for explicit user approval before simulating the workflow in one thread.
+
+## Runtime inheritance caveat
+
+The generated `.codex/agents/*.toml` files define the intended role and sandbox posture for each child agent. They do not override the active Codex session.
+
+Operationally that means:
+
+- the parent session still controls whether child agents can actually spawn
+- the parent session still controls approval posture
+- the parent session still controls network posture
+- the parent session still controls effective child-depth limits
+
+If the parent/runtime blocks one of those capabilities, treat that as an environment limitation rather than assuming the `.toml` file will force a different outcome.

@@ -58,6 +58,10 @@ Important:
 - Never paste literal angle-bracket placeholders such as `<goal>` into shell commands. Use a real quoted string instead.
 - Choose the wrapper that matches the current environment. The wrappers select a working Python launcher automatically.
 - Keep `--root .` pointed at the target repo.
+- Minimum supported Python version is `3.10`; `3.11+` is recommended.
+- If the runtime is Python `3.10`, install `tomli` so the TOML-reading helpers can parse `.toml` files.
+- The generated `.codex/agents/*.toml` files describe the intended role and sandbox posture, but the active Codex session still controls what child agents can actually do at runtime.
+- If the parent session blocks network, approvals, or child depth, AutoCatalyst inherits that limitation.
 
 ### Repo-local skill install
 
@@ -159,14 +163,7 @@ Choose one evidence mode before challenger generation:
 - **`benchmark-first`** when success is mostly captured by tests, latency, pass rate, cost, size, or another trusted metric.
 - **`hybrid`** when hard checks matter but human judgment still decides quality.
 
-When evidence mode is ambiguous, run a **real subagent vote**:
-
-1. spawn `autocatalyst_planner`
-2. spawn `autocatalyst_critic`
-3. spawn one `autocatalyst_judge`
-4. ask each to choose `judge-first`, `benchmark-first`, or `hybrid`
-5. wait for all three results
-6. use the majority result; break ties in favor of `hybrid`
+When evidence mode is ambiguous, spawn `autocatalyst_selector` and use it to choose between `judge-first`, `benchmark-first`, and `hybrid`.
 
 ## Browse by default
 
@@ -181,6 +178,7 @@ Browse the web by default whenever external facts, APIs, frameworks, libraries, 
 
 Use the custom agents installed at `.codex/agents/`:
 
+- `autocatalyst_selector`
 - `autocatalyst_planner`
 - `autocatalyst_researcher`
 - `autocatalyst_critic`
@@ -214,7 +212,7 @@ This skill runs under the repository's active Codex agent limits.
 In this repository, `.codex/config.toml` currently sets:
 
 - `max_threads = 6`
-- `max_depth = 1`
+- `max_depth = 3`
 
 Treat those values as a hard operational budget.
 
@@ -238,12 +236,13 @@ If the environment cannot supply enough headroom for the next required batch, st
 
 Pass only the minimum context each role needs.
 
+- **selector**: anchor, repo scope, evaluation stakes, explicit deliverables
 - **planner**: anchor, repo scope, current inputs, explicit deliverables
 - **researcher**: precise research questions, links, repo paths, required citation style
 - **critic**: anchor + incumbent `A` only
 - **rewriter**: anchor + `A` + critique + evidence packet if relevant
 - **synthesizer**: anchor + `A` + `B` + critique summary if needed
-- **judge panel**: anchor + rubric + anonymized `A/B/AB` only
+- **judge panel**: anchor + rubric + per-judge blinded candidate aliases only
 
 Do not leak prior verdicts, author labels, or raw research sprawl into judge context.
 
@@ -325,7 +324,7 @@ For implementation tasks, treat passing tests as necessary but not always suffic
 
 ### 8. Run the tribunal
 
-For blind judging, collect **three** real `autocatalyst_judge` results, anonymize the candidates, and aggregate the ranking conservatively. Under tight thread limits, run the panel in bounded batches instead of forcing all three judges to exist simultaneously.
+For blind judging, collect **three** real `autocatalyst_judge` results from per-judge blinded packets and aggregate the ranking conservatively. Under tight thread limits, run the panel in bounded batches instead of forcing all three judges to exist simultaneously.
 
 Tribunal order:
 
@@ -465,5 +464,23 @@ Prefer the helper script with real values, not literal angle-bracket placeholder
 ```bash
 python3 .agents/skills/autocatalyst/scripts/log_round.py --root . --round 1 --winner AB --status promote --winner-reason "AB merged the strongest ideas and passed the current checks" --hard-checks pass
 ```
+
+When a round used blinded judging, also log the tribunal structure explicitly:
+
+- `--critic-output-artifact <path>` when you saved a structured critic output
+- `--researcher-output-artifact <path>` when you saved a structured researcher output
+- `--candidate-map-artifact <path>`
+- `--tribunal-summary-artifact <path>`
+- `--judge-verdict-artifact judge1=<path>` repeated per judge
+- `--judge-panel-ranking "judge1=Candidate 2>Candidate 1>Candidate 3"` repeated per judge
+- `--aggregation-method "<description>"`
+
+Judge, critic, and researcher outputs can end with a structured JSON block. Validate those saved artifacts with:
+
+```bash
+python3 .agents/skills/autocatalyst/scripts/validate_structured_output.py --role judge --file /path/to/output.md
+```
+
+When you later call `log_round.py`, prefer passing the saved verdict / critic / researcher / tribunal artifacts in the `--artifact` list. The logger can auto-discover and ingest those structured outputs instead of forcing the parent to repeat every path in dedicated flags.
 
 Use [references/workflow.md](references/workflow.md) for round structure, [references/evidence-modes.md](references/evidence-modes.md) for evidence-mode selection, [references/subagents.md](references/subagents.md) for role packets, and [references/artifact-templates.md](references/artifact-templates.md) for output templates.

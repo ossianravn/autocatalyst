@@ -1,0 +1,230 @@
+name: Smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        python-version:
+          - "3.11"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Smoke bootstrap and render flow
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tmp_repo=".ci-smoke/work"
+          rm -rf .ci-smoke
+          mkdir -p "$tmp_repo"
+
+          python scripts/bootstrap.py \
+            --root "$tmp_repo" \
+            --goal "Smoke test the AutoCatalyst workflow" \
+            --task-class planning \
+            --evidence-mode judge-first \
+            --install-agents-md
+
+          python scripts/install_subagents.py --root "$tmp_repo" --overwrite
+
+          python scripts/init_session.py \
+            --root "$tmp_repo" \
+            --goal "Smoke test the AutoCatalyst workflow" \
+            --task-class planning \
+            --evidence-mode judge-first \
+            --install-subagents \
+            --install-agents-md
+
+          mkdir -p "$tmp_repo/autocatalyst-artifacts/rounds"
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-report-concept-a.md" <<'EOF'
+          # Candidate A
+
+          ## Summary
+
+          A keeps the brief simple.
+          EOF
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-report-concept-b.md" <<'EOF'
+          # Candidate B
+
+          ## Summary
+
+          B adds a stronger chronology.
+          EOF
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-report-concept-ab.md" <<'EOF'
+          # Candidate AB
+
+          ## Summary
+
+          AB keeps the clarity from A and the chronology from B.
+          EOF
+
+          python scripts/prepare_judge_packets.py \
+            --root "$tmp_repo" \
+            --round 1 \
+            --anchor autocatalyst.md \
+            --rubric autocatalyst-rubric.md \
+            --candidate A=autocatalyst-artifacts/rounds/round-001-report-concept-a.md \
+            --candidate B=autocatalyst-artifacts/rounds/round-001-report-concept-b.md \
+            --candidate AB=autocatalyst-artifacts/rounds/round-001-report-concept-ab.md
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-judge-1-verdict.md" <<'EOF'
+          # Judge 1 Verdict
+          
+          ## Summary
+          
+          Candidate 2 had the strongest chronology.
+
+          ## Structured Output
+
+          ```json
+          {
+            "schema": "autocatalyst.judge.v1",
+            "ranking": ["Candidate 2", "Candidate 1", "Candidate 3"],
+            "winner": "Candidate 2",
+            "rationale": "Candidate 2 had the strongest chronology.",
+            "blockers": []
+          }
+          ```
+          EOF
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-judge-2-verdict.md" <<'EOF'
+          # Judge 2 Verdict
+          
+          ## Summary
+          
+          Candidate 2 balanced clarity and sequencing best.
+
+          ## Structured Output
+
+          ```json
+          {
+            "schema": "autocatalyst.judge.v1",
+            "ranking": ["Candidate 2", "Candidate 3", "Candidate 1"],
+            "winner": "Candidate 2",
+            "rationale": "Candidate 2 balanced clarity and sequencing best.",
+            "blockers": []
+          }
+          ```
+          EOF
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-judge-3-verdict.md" <<'EOF'
+          # Judge 3 Verdict
+          
+          ## Summary
+          
+          Candidate 1 was solid, but Candidate 2 explained the path better.
+
+          ## Structured Output
+
+          ```json
+          {
+            "schema": "autocatalyst.judge.v1",
+            "ranking": ["Candidate 1", "Candidate 2", "Candidate 3"],
+            "winner": "Candidate 1",
+            "rationale": "Candidate 1 was solid, but Candidate 2 explained the path better.",
+            "blockers": []
+          }
+          ```
+          EOF
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-critic.md" <<'EOF'
+          # Critic
+
+          Hard blockers:
+          - The current version does not explain chronology well enough.
+
+          ## Structured Output
+
+          ```json
+          {
+            "schema": "autocatalyst.critic.v1",
+            "rewriteWarranted": true,
+            "hardBlockers": ["The current version does not explain chronology well enough."],
+            "softConcerns": ["The summary could be tighter."],
+            "suggestedRubricItems": ["Must explain the request-to-outcome path clearly."]
+          }
+          ```
+          EOF
+
+          cat > "$tmp_repo/autocatalyst-artifacts/rounds/round-001-research.md" <<'EOF'
+          # Research
+
+          Confirmed facts:
+          - The repo has cross-platform smoke coverage in this workflow.
+
+          ## Structured Output
+
+          ```json
+          {
+            "schema": "autocatalyst.researcher.v1",
+            "confirmedFacts": [
+              {
+                "claim": "The smoke workflow exercises bootstrap, logging, and rendering.",
+                "citation": "[.github/workflows/smoke.yml]"
+              }
+            ],
+            "unresolvedQuestions": ["Whether future workflows should add Python 3.10 coverage too."],
+            "implications": ["The repo now has a portable smoke baseline."],
+            "conflicts": []
+          }
+          ```
+          EOF
+
+          python scripts/log_round.py \
+            --root "$tmp_repo" \
+            --round 1 \
+            --winner AB \
+            --status promote \
+            --winner-reason "AB merged the clearest structure and strongest chronology." \
+            --hard-checks pass \
+            --judge-ranking AB B A \
+            --artifact autocatalyst-artifacts/rounds/round-001-report-concept-a.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-report-concept-b.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-report-concept-ab.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-candidate-map.json \
+            --artifact autocatalyst-artifacts/rounds/round-001-judge-1-packet.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-judge-2-packet.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-judge-3-packet.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-tribunal-summary.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-judge-1-verdict.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-judge-2-verdict.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-judge-3-verdict.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-critic.md \
+            --artifact autocatalyst-artifacts/rounds/round-001-research.md \
+            --aggregation-method "majority ranking after unblinding"
+
+          python scripts/render_dashboard.py --root "$tmp_repo"
+
+          test -f "$tmp_repo/autocatalyst.md"
+          test -f "$tmp_repo/autocatalyst.jsonl"
+          test -f "$tmp_repo/autocatalyst-dashboard.md"
+          test -f "$tmp_repo/autocatalyst-report.html"
+          test -f "$tmp_repo/autocatalyst-artifacts/rounds/round-001-candidate-map.json"
+          test -f "$tmp_repo/autocatalyst-artifacts/rounds/round-001-tribunal-summary.md"
+
+          grep -q "Latest tribunal" "$tmp_repo/autocatalyst-dashboard.md"
+          grep -q "Latest critic" "$tmp_repo/autocatalyst-dashboard.md"
+          grep -q "Latest research" "$tmp_repo/autocatalyst-dashboard.md"
+          grep -q "Blind judges" "$tmp_repo/autocatalyst-report.html"
+          grep -q "Rewrite warranted" "$tmp_repo/autocatalyst-report.html"
+          grep -q "Confirmed facts" "$tmp_repo/autocatalyst-report.html"

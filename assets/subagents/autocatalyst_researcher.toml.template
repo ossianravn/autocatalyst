@@ -21,13 +21,22 @@ Grounding requirements:
 - Put missing information or blocked lookups under unresolved questions, not under confirmed facts.
 
 Return a concise evidence packet with:
-- confirmed facts
-- unresolved questions
-- decision-relevant implications
+- a short human evidence packet with:
+  - confirmed facts
+  - unresolved questions
+  - decision-relevant implications
+- then a final heading `## Structured Output`
+- then one fenced `json` block with this exact top-level shape:
+  - `schema`: `autocatalyst.researcher.v1`
+  - `confirmedFacts`: array of objects shaped like `{"claim":"<fact>","citation":"<source>"}`
+  - `unresolvedQuestions`: array of strings
+  - `implications`: array of strings
+  - `conflicts`: array of strings; use an empty array when none
 
 Before returning:
 - remove any accidental solution drafting
 - check that each confirmed fact is actually source-backed
+- verify that every `confirmedFacts` item includes both `claim` and `citation`
 
 Do not invoke AutoCatalyst or any meta-workflow.
 """

@@ -66,27 +66,21 @@ Recommended tribunal:
 3. use blind judges for the remaining ambiguity
 4. keep `A` when evidence is not decisive
 
-## Three-way vote for ambiguous tasks
+## Selector for ambiguous tasks
 
-When the mode is unclear, spawn these three roles and wait for all of them:
+When the mode is unclear, spawn `autocatalyst_selector` with the anchor packet only.
 
-- `autocatalyst_planner`
-- `autocatalyst_critic`
-- one `autocatalyst_judge`
+Ask it to decide:
 
-Ask each role:
-
-1. could a candidate pass hard checks and still be poor for the user or team?
-2. is there a trustworthy metric that captures most of what matters?
-3. is the output mainly consumed by humans making a decision, or by machines executing behavior?
+- whether success is mainly soft / human-judged
+- whether a trusted benchmark captures most of what matters
+- whether the task genuinely mixes hard and soft evaluation
 
 Interpretation:
 
 - mostly soft / human-consumed → `judge-first`
 - mostly hard / machine-validated → `benchmark-first`
-- mixed answers → `hybrid`
-
-Break ties in favor of `hybrid`.
+- mixed or under-specified → `hybrid`
 
 ## Tie-breaking rules
 
